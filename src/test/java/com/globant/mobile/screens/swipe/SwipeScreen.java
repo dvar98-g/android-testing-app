@@ -3,7 +3,6 @@ package com.globant.mobile.screens.swipe;
 
 import com.globant.mobile.utils.BaseScreen;
 import io.appium.java_client.android.AndroidDriver;
-import org.openqa.selenium.By;
 
 /**
  * Representa la pantalla Swipe.
@@ -32,10 +31,6 @@ public class SwipeScreen extends BaseScreen {
     }
 
     public boolean isCarouselDisplayed() {
-        return isDisplayed(carouselLocator());
-    }
-
-    private By carouselLocator() {
-        return androidUiAutomator(String.format("new UiSelector().resourceId(\"%s\")", CAROUSEL_RESOURCE_ID));
+        return isDisplayed(resourceIdLocator(CAROUSEL_RESOURCE_ID));
     }
 }

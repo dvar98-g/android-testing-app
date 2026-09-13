@@ -5,12 +5,17 @@ import io.appium.java_client.AppiumBy;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.Rectangle;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Pause;
+import org.openqa.selenium.interactions.PointerInput;
+import org.openqa.selenium.interactions.Sequence;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +31,10 @@ public abstract class BaseScreen {
     private static final double GESTURE_AREA_MARGIN_RATIO = 0.1;
     private static final double GESTURE_AREA_SIZE_RATIO = 0.8;
     private static final double GESTURE_PERCENT = 0.75;
+    private static final int TAP_PRESS_DURATION_MILLIS = 120;
+    private static final int TAP_MOVE_DURATION_MILLIS = 40;
+    private static final int TAP_MICRO_MOVE_PIXELS = 2;
+    private static final long SCROLL_SETTLE_MILLIS = 1000;
 
     protected final AndroidDriver driver;
     protected final WebDriverWait wait;
@@ -44,8 +53,35 @@ public abstract class BaseScreen {
         return wait.until(ExpectedConditions.elementToBeClickable(locator));
     }
 
+    /**
+     * Toca un elemento usando W3C Actions sobre el centro de sus bounds.
+     * <p>
+     * El gesto incluye deliberadamente un micro-movimiento y una presion
+     * prolongada: el sistema de responders de React Native puede descartar
+     * un toque perfectamente estatico e instantaneo (se verifico que un
+     * toque humano real en las mismas coordenadas si dispara el onPress,
+     * mientras que click(), "mobile: clickGesture" y un tap W3C plano no).
+     */
     protected void tap(By locator) {
-        waitForClickable(locator).click();
+        WebElement element = waitForClickable(locator);
+        Rectangle rect = element.getRect();
+        int centerX = rect.getX() + rect.getWidth() / 2;
+        int centerY = rect.getY() + rect.getHeight() / 2;
+
+        PointerInput finger = new PointerInput(PointerInput.Kind.TOUCH, "finger");
+        Sequence tapSequence = new Sequence(finger, 1)
+                .addAction(finger.createPointerMove(Duration.ZERO, PointerInput.Origin.viewport(), centerX, centerY))
+                .addAction(finger.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                .addAction(new Pause(finger, Duration.ofMillis(TAP_PRESS_DURATION_MILLIS)))
+                .addAction(finger.createPointerMove(
+                        Duration.ofMillis(TAP_MOVE_DURATION_MILLIS),
+                        PointerInput.Origin.viewport(),
+                        centerX + TAP_MICRO_MOVE_PIXELS,
+                        centerY))
+                .addAction(new Pause(finger, Duration.ofMillis(TAP_PRESS_DURATION_MILLIS)))
+                .addAction(finger.createPointerUp(PointerInput.MouseButton.LEFT.asArg()));
+
+        driver.perform(Collections.singletonList(tapSequence));
     }
 
     protected void type(By locator, String text) {
@@ -91,6 +127,47 @@ public abstract class BaseScreen {
                 "new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().description(\"%s\"))",
                 description
         ));
+    }
+
+    /**
+     * Shortcut para localizar por resource-id exacto via UiSelector().resourceId(...).
+     * Util para elementos sin content-desc propio (ej. dialogs nativos del SO).
+     */
+    protected By resourceIdLocator(String resourceId) {
+        return androidUiAutomator(String.format("new UiSelector().resourceId(\"%s\")", resourceId));
+    }
+
+    /**
+     * Localiza por el atributo text exacto. Necesario cuando el elemento que
+     * realmente responde al toque es el TextView hijo y no el ViewGroup
+     * contenedor que lleva el content-desc.
+     */
+    protected By textLocator(String text) {
+        return androidUiAutomator(String.format("new UiSelector().text(\"%s\")", text));
+    }
+
+    /**
+     * Dispara el scroll hacia un elemento UNA sola vez (a diferencia de
+     * scrollToDescriptionLocator, que al usarse dentro de un wait se
+     * reevalua -- y por lo tanto re-scrollea -- en cada poll, pudiendo
+     * generar una posicion inestable).
+     * <p>
+     * Tras el scroll espera a que la inercia (fling) del ScrollView se
+     * asiente: el responder system de React Native puede capturar y cancelar
+     * un toque que llega inmediatamente despues de un gesto de scroll, de
+     * modo que el tap siguiente no alcanza al elemento destino.
+     */
+    protected void scrollToElement(String description) {
+        driver.findElement(scrollToDescriptionLocator(description));
+        waitForScrollToSettle();
+    }
+
+    private void waitForScrollToSettle() {
+        try {
+            Thread.sleep(SCROLL_SETTLE_MILLIS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
