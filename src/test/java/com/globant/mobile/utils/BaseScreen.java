@@ -80,6 +80,20 @@ public abstract class BaseScreen {
     }
 
     /**
+     * Localiza un elemento por content-desc exacto, scrolleando automaticamente
+     * dentro del contenedor scrollable mas cercano si no esta inicialmente
+     * visible en el viewport (UiScrollable.scrollIntoView). Usar solo cuando
+     * se sabe que el elemento puede quedar fuera del area visible sin scroll
+     * manual -- para elementos siempre visibles, descriptionLocator alcanza.
+     */
+    protected By scrollToDescriptionLocator(String description) {
+        return androidUiAutomator(String.format(
+                "new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().description(\"%s\"))",
+                description
+        ));
+    }
+
+    /**
      * Ejecuta un swipe sobre un area central de la pantalla (evita bordes,
      * donde algunos gestos del sistema pueden interferir).
      */
