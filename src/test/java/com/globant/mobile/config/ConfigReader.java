@@ -22,7 +22,6 @@ public final class ConfigReader {
     private static final String PLATFORM_NAME_DEFAULT = "Android";
     private static final String AUTOMATION_NAME_DEFAULT = "UiAutomator2";
     private static final int EXPLICIT_WAIT_SECONDS_DEFAULT = 15;
-    private static final int ACTION_DELAY_MILLIS_DEFAULT = 0;
     private static final String TEST_EMAIL_DOMAIN_DEFAULT = "test.com";
     private static final String TEST_PASSWORD_DEFAULT = "Test1234!";
 
@@ -76,11 +75,6 @@ public final class ConfigReader {
     public int getExplicitWaitSeconds() {
         String value = resolveOptional("EXPLICIT_WAIT_SECONDS", "explicit.wait.seconds", null);
         return parseIntOrDefault(value, EXPLICIT_WAIT_SECONDS_DEFAULT);
-    }
-
-    public int getActionDelayMillis() {
-        String value = resolveOptional("ACTION_DELAY_MILLIS", "action.delay.millis", null);
-        return parseIntOrDefault(value, ACTION_DELAY_MILLIS_DEFAULT);
     }
 
     public String getTestEmailDomain() {
