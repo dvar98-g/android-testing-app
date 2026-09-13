@@ -4,13 +4,13 @@ import com.globant.mobile.config.ConfigReader;
 import io.appium.java_client.AppiumBy;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.By;
-import org.openqa.selenium.Dimension;
 import org.openqa.selenium.Rectangle;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Pause;
 import org.openqa.selenium.interactions.PointerInput;
 import org.openqa.selenium.interactions.Sequence;
+import org.openqa.selenium.remote.RemoteWebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -28,13 +28,14 @@ import java.util.Map;
  */
 public abstract class BaseScreen {
 
-    private static final double GESTURE_AREA_MARGIN_RATIO = 0.1;
-    private static final double GESTURE_AREA_SIZE_RATIO = 0.8;
-    private static final double GESTURE_PERCENT = 0.75;
     private static final int TAP_PRESS_DURATION_MILLIS = 120;
     private static final int TAP_MOVE_DURATION_MILLIS = 40;
     private static final int TAP_MICRO_MOVE_PIXELS = 2;
     private static final long SCROLL_SETTLE_MILLIS = 1000;
+    private static final double SWIPE_NEAR_EDGE_RATIO = 0.2;
+    private static final double SWIPE_FAR_EDGE_RATIO = 0.8;
+    private static final int SWIPE_DURATION_MILLIS = 1000;
+    private static final int FLING_SPEED = 2000;
 
     protected final AndroidDriver driver;
     protected final WebDriverWait wait;
@@ -130,6 +131,17 @@ public abstract class BaseScreen {
     }
 
     /**
+     * Variante de scrollToDescriptionLocator para elementos que solo se pueden
+     * identificar por su texto.
+     */
+    protected By scrollToTextLocator(String text) {
+        return androidUiAutomator(String.format(
+                "new UiScrollable(new UiSelector().scrollable(true)).scrollIntoView(new UiSelector().text(\"%s\"))",
+                text
+        ));
+    }
+
+    /**
      * Shortcut para localizar por resource-id exacto via UiSelector().resourceId(...).
      * Util para elementos sin content-desc propio (ej. dialogs nativos del SO).
      */
@@ -162,7 +174,7 @@ public abstract class BaseScreen {
         waitForScrollToSettle();
     }
 
-    private void waitForScrollToSettle() {
+    protected void waitForScrollToSettle() {
         try {
             Thread.sleep(SCROLL_SETTLE_MILLIS);
         } catch (InterruptedException e) {
@@ -171,21 +183,128 @@ public abstract class BaseScreen {
     }
 
     /**
-     * Ejecuta un swipe sobre un area central de la pantalla (evita bordes,
-     * donde algunos gestos del sistema pueden interferir).
+     * Verifica si un elemento esta presente en el arbol, sin esperar. Util en
+     * bucles donde la ausencia es el caso esperado en la mayoria de las
+     * iteraciones y aplicar el timeout completo cada vez seria muy costoso.
      */
-    protected void swipe(Direction direction) {
-        Dimension size = driver.manage().window().getSize();
+    protected boolean isPresent(By locator) {
+        return !driver.findElements(locator).isEmpty();
+    }
+
+    /**
+     * Espera a que un elemento deje de estar presente/visible. A diferencia
+     * de negar isDisplayed(), esta condicion resuelve apenas el elemento
+     * desaparece en vez de agotar el timeout completo.
+     */
+    protected boolean waitUntilNotDisplayed(By locator) {
+        try {
+            return wait.until(ExpectedConditions.invisibilityOfElementLocated(locator));
+        } catch (TimeoutException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Ejecuta un swipe dentro de los bounds reales del elemento indicado,
+     * calculados en runtime (la posicion de los componentes cambia segun el
+     * scroll de la pantalla, por lo que coordenadas fijas no son confiables).
+     * <p>
+     * Usa W3C Actions en vez de "mobile: swipeGesture" por consistencia con
+     * tap(): es el mecanismo que resulto confiable con los componentes de
+     * React Native de esta app.
+     */
+    protected void swipeOnElement(By locator, Direction direction) {
+        Rectangle rect = waitForVisibility(locator).getRect();
+
+        int startX;
+        int startY;
+        int endX;
+        int endY;
+
+        switch (direction) {
+            case LEFT -> {
+                startY = endY = rect.getY() + rect.getHeight() / 2;
+                startX = rect.getX() + (int) (rect.getWidth() * SWIPE_FAR_EDGE_RATIO);
+                endX = rect.getX() + (int) (rect.getWidth() * SWIPE_NEAR_EDGE_RATIO);
+            }
+            case RIGHT -> {
+                startY = endY = rect.getY() + rect.getHeight() / 2;
+                startX = rect.getX() + (int) (rect.getWidth() * SWIPE_NEAR_EDGE_RATIO);
+                endX = rect.getX() + (int) (rect.getWidth() * SWIPE_FAR_EDGE_RATIO);
+            }
+            case UP -> {
+                startX = endX = rect.getX() + rect.getWidth() / 2;
+                startY = rect.getY() + (int) (rect.getHeight() * SWIPE_FAR_EDGE_RATIO);
+                endY = rect.getY() + (int) (rect.getHeight() * SWIPE_NEAR_EDGE_RATIO);
+            }
+            case DOWN -> {
+                startX = endX = rect.getX() + rect.getWidth() / 2;
+                startY = rect.getY() + (int) (rect.getHeight() * SWIPE_NEAR_EDGE_RATIO);
+                endY = rect.getY() + (int) (rect.getHeight() * SWIPE_FAR_EDGE_RATIO);
+            }
+            default -> throw new IllegalArgumentException("Unsupported swipe direction: " + direction);
+        }
+
+        PointerInput finger = new PointerInput(PointerInput.Kind.TOUCH, "finger");
+        Sequence swipeSequence = new Sequence(finger, 1)
+                .addAction(finger.createPointerMove(Duration.ZERO, PointerInput.Origin.viewport(), startX, startY))
+                .addAction(finger.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                .addAction(finger.createPointerMove(
+                        Duration.ofMillis(SWIPE_DURATION_MILLIS),
+                        PointerInput.Origin.viewport(),
+                        endX, endY))
+                .addAction(finger.createPointerUp(PointerInput.MouseButton.LEFT.asArg()));
+
+        driver.perform(Collections.singletonList(swipeSequence));
+        waitForScrollToSettle();
+    }
+
+    /**
+     * Ejecuta un fling sobre el elemento indicado.
+     * <p>
+     * A diferencia de swipeOnElement (un arrastre de A a B), el fling imprime
+     * velocidad al gesto, que es lo que un carrusel con snap necesita para
+     * completar la transicion a la pagina siguiente. Un arrastre por
+     * coordenadas deja el resultado librado a donde termine el dedo virtual:
+     * segun el caso la app completa el cambio de card o lo revierte, lo que
+     * vuelve al test inestable entre corridas.
+     */
+    protected void flingOnElement(By locator, Direction direction) {
+        WebElement element = waitForVisibility(locator);
 
         Map<String, Object> params = new HashMap<>();
-        params.put("left", (int) (size.width * GESTURE_AREA_MARGIN_RATIO));
-        params.put("top", (int) (size.height * GESTURE_AREA_MARGIN_RATIO));
-        params.put("width", (int) (size.width * GESTURE_AREA_SIZE_RATIO));
-        params.put("height", (int) (size.height * GESTURE_AREA_SIZE_RATIO));
+        params.put("elementId", ((RemoteWebElement) element).getId());
         params.put("direction", direction.name().toLowerCase());
-        params.put("percent", GESTURE_PERCENT);
+        params.put("speed", FLING_SPEED);
 
-        driver.executeScript("mobile: swipeGesture", params);
+        driver.executeScript("mobile: flingGesture", params);
+        waitForScrollToSettle();
+    }
+
+    /** Devuelve los bounds reales del elemento, para calcular gestos en runtime. */
+    protected Rectangle getRect(By locator) {
+        return waitForVisibility(locator).getRect();
+    }
+
+    /**
+     * Arrastra verticalmente entre dos coordenadas sobre la misma columna.
+     * Permite acotar el gesto a una franja libre de componentes que capturen
+     * el toque (ej. un carrusel, que solo responde en horizontal y no propaga
+     * el desplazamiento vertical a su contenedor).
+     */
+    protected void swipeVerticallyBetween(int x, int startY, int endY) {
+        PointerInput finger = new PointerInput(PointerInput.Kind.TOUCH, "finger");
+        Sequence swipeSequence = new Sequence(finger, 1)
+                .addAction(finger.createPointerMove(Duration.ZERO, PointerInput.Origin.viewport(), x, startY))
+                .addAction(finger.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                .addAction(finger.createPointerMove(
+                        Duration.ofMillis(SWIPE_DURATION_MILLIS),
+                        PointerInput.Origin.viewport(),
+                        x, endY))
+                .addAction(finger.createPointerUp(PointerInput.MouseButton.LEFT.asArg()));
+
+        driver.perform(Collections.singletonList(swipeSequence));
+        waitForScrollToSettle();
     }
 
     public enum Direction {
