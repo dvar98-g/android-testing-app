@@ -23,6 +23,8 @@ public final class ConfigReader {
     private static final String AUTOMATION_NAME_DEFAULT = "UiAutomator2";
     private static final int EXPLICIT_WAIT_SECONDS_DEFAULT = 15;
     private static final int ACTION_DELAY_MILLIS_DEFAULT = 0;
+    private static final String TEST_EMAIL_DOMAIN_DEFAULT = "test.com";
+    private static final String TEST_PASSWORD_DEFAULT = "Test1234!";
 
     private final Properties properties;
 
@@ -79,6 +81,14 @@ public final class ConfigReader {
     public int getActionDelayMillis() {
         String value = resolveOptional("ACTION_DELAY_MILLIS", "action.delay.millis", null);
         return parseIntOrDefault(value, ACTION_DELAY_MILLIS_DEFAULT);
+    }
+
+    public String getTestEmailDomain() {
+        return resolveOptional("TEST_EMAIL_DOMAIN", "test.email.domain", TEST_EMAIL_DOMAIN_DEFAULT);
+    }
+
+    public String getTestPassword() {
+        return resolveOptional("TEST_PASSWORD", "test.password", TEST_PASSWORD_DEFAULT);
     }
 
     private String resolveOptional(String envVarName, String propertyKey, String defaultValue) {

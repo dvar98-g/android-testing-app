@@ -25,9 +25,19 @@ public class MenuScreen extends BaseScreen {
     private static final String STAR_ACTIVE_GLYPH = "\uDB81\uDCCE";
     // Codepoint del glifo de estrella vacia: pantalla inactiva, oculta de la tab bar.
     private static final String STAR_INACTIVE_GLYPH = "\uDB81\uDCD2";
+    // Marca el panel lateral en si (distinto de cada item individual).
+    private static final String PANEL_MARKER = "tab-side-menu-panel";
 
     public MenuScreen(AndroidDriver driver) {
         super(driver);
+    }
+
+    public boolean isPanelDisplayed() {
+        return isDisplayed(descriptionLocator(PANEL_MARKER));
+    }
+
+    public boolean isItemDisplayed(String key) {
+        return isDisplayed(itemLocator(key));
     }
 
     public void tapItem(String key) {

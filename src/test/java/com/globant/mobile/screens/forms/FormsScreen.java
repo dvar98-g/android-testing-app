@@ -10,6 +10,10 @@ import io.appium.java_client.android.AndroidDriver;
  * que la pantalla cargo y que sus controles principales (input, switch,
  * dropdown, botones) estan visibles. No cubre el flujo funcional completo de
  * cada control (eso corresponde a un test dedicado del modulo Forms).
+ * <p>
+ * Los botones Active/Inactive quedan fuera del viewport inicial (debajo del
+ * fold, requieren scroll dentro del ScrollView de la pantalla) por eso se
+ * localizan con scrollToDescriptionLocator en vez de descriptionLocator.
  */
 public class FormsScreen extends BaseScreen {
 
@@ -41,10 +45,10 @@ public class FormsScreen extends BaseScreen {
     }
 
     public boolean isActiveButtonDisplayed() {
-        return isDisplayed(descriptionLocator(BUTTON_ACTIVE));
+        return isDisplayed(scrollToDescriptionLocator(BUTTON_ACTIVE));
     }
 
     public boolean isInactiveButtonDisplayed() {
-        return isDisplayed(descriptionLocator(BUTTON_INACTIVE));
+        return isDisplayed(scrollToDescriptionLocator(BUTTON_INACTIVE));
     }
 }

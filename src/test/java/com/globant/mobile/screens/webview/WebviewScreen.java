@@ -1,4 +1,4 @@
-package com.globant.mobile.screens.view;
+package com.globant.mobile.screens.webview;
 
 import com.globant.mobile.utils.BaseScreen;
 import io.appium.java_client.android.AndroidDriver;
