@@ -1,6 +1,7 @@
 package com.globant.mobile.utils;
 
 import com.globant.mobile.config.ConfigReader;
+import io.appium.java_client.AppiumBy;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
@@ -59,6 +60,23 @@ public abstract class BaseScreen {
         } catch (TimeoutException e) {
             return false;
         }
+    }
+
+    /**
+     * Construye un locator a partir de una expresion UiSelector de UiAutomator2
+     * (ej. "new UiSelector().description(\"foo\")"). Centraliza esta construccion
+     * para que los Screens concretos no dupliquen el mismo wrapper.
+     */
+    protected By androidUiAutomator(String uiSelectorExpression) {
+        return AppiumBy.androidUIAutomator(uiSelectorExpression);
+    }
+
+    /**
+     * Shortcut para el patron mas repetido entre Screens: localizar por
+     * content-desc exacto via UiSelector().description(...).
+     */
+    protected By descriptionLocator(String description) {
+        return androidUiAutomator(String.format("new UiSelector().description(\"%s\")", description));
     }
 
     /**
